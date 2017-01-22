@@ -41,6 +41,9 @@ final class VoNaLoggerImpl implements VoNaLogger {
      * See {@link #mLoggingEntries} and {@link #mProcessingEntries}
      * <p>
      * Entries list is created in {@link #createCurrentListOfEntries()}
+     *
+     * Minimum 10 for "at least" some effectiveness of logging to the list until it filled.
+     * If user specifies "1" then this might cause performance issues.
      */
     private static final int DEFAULT_ENTRIES_COUNT_IN_SINGLE_LIST = 10;
 
@@ -119,6 +122,8 @@ final class VoNaLoggerImpl implements VoNaLogger {
                                 e.printStackTrace();
                             }
                         } else {
+//                            if (DEBUG) System.out.println("ProcessingRunnable, mProcessingEntries " + mProcessingEntries);
+
                             listOfEntriesToProcess = mProcessingEntries.poll();
 
                             writeEntriesToFile(listOfEntriesToProcess);
@@ -202,10 +207,17 @@ final class VoNaLoggerImpl implements VoNaLogger {
             rotateFiles();
         }
         for (LogEntry logEntry : listOfEntriesToProcess) {
-            String text = logEntry.getMergedString();
-            mWriter.append(text);
-            mWriter.append("\n");
+
+            if(logEntry.isEntryFilledWithData()){
+                String text = logEntry.getMergedStringAndClean();
+                mWriter.append(text);
+                mWriter.append("\n");
+            } else {
+                if (DEBUG) System.out.println("writeEntriesToFile, found empty logEntry. Probably it wasn't filled yet.");
+                //TODO: may I "break" here? Break if all the rest of LogEntries are empty. TODO: check
+            }
         }
+        mWriter.flush();
         if (DEBUG) System.out.println("<< writeEntriesToFile");
     }
 
@@ -214,15 +226,16 @@ final class VoNaLoggerImpl implements VoNaLogger {
      * This method rotates them in this way.
      * <p>
      * 1. log1 _
-     * \
-     * -> log2
+     *          \
+     *           -> log2
      * 2. log2 _
-     * \
-     * -> log3
+     *          \
+     *           -> log3
      * 3. log3 _
-     * \
-     * -> removed
+     *          \
+     *           -> removed
      * <p>
+     *
      * 4. empty "log1" created. From this moment empty log1 is "current file".
      */
     private File rotateFiles() throws IOException {
@@ -442,9 +455,9 @@ final class VoNaLoggerImpl implements VoNaLogger {
      */
     private void createCurrentListOfEntries() {
         if (DEBUG) System.out.println(">> createCurrentListOfEntries");
-        mCurrentLogEntryList = new ArrayList<>(DEFAULT_ENTRIES_COUNT_IN_SINGLE_LIST);
+        mCurrentLogEntryList = new ArrayList<>(mEntriesCountInSingleList);
 
-        for (int index = 0; index < DEFAULT_ENTRIES_COUNT_IN_SINGLE_LIST; index++) {
+        for (int index = 0; index < mEntriesCountInSingleList; index++) {
             mCurrentLogEntryList.add(new LogEntry());
         }
 
@@ -457,6 +470,7 @@ final class VoNaLoggerImpl implements VoNaLogger {
 
     @Override
     public int writeLog(Object... parameters) {
+
         if(mTerminated.get()){
             return 0;
         }
@@ -467,7 +481,7 @@ final class VoNaLoggerImpl implements VoNaLogger {
 
             if (DEBUG) {
                 System.out.println("    writeLog, mCurrentItemIndex " + mCurrentItemIndex);
-                System.out.println("    writeLog, entries count " + ((long) (mProcessingEntries.size() + mLoggingEntries.size()) * (long) DEFAULT_ENTRIES_COUNT_IN_SINGLE_LIST));
+                System.out.println("    writeLog, entries count " + ((long) (mProcessingEntries.size() + mLoggingEntries.size()) * (long) mEntriesCountInSingleList));
                 System.out.println("    writeLog, mProcessingEntries count " + (long) (mProcessingEntries.size()));
                 System.out.println("    writeLog, mLoggingEntries count " + (long) (mLoggingEntries.size()));
             }
@@ -516,11 +530,12 @@ final class VoNaLoggerImpl implements VoNaLogger {
     }
 
     private boolean isCurrentEntryLogListFilled() {
+        boolean isCurrentEntryLogListFilled = mCurrentItemIndex >= mEntriesCountInSingleList;
         if (DEBUG) {
             System.out.println("    isCurrentEntryLogListFilled, mCurrentItemIndex " + mCurrentItemIndex);
-            System.out.println("    isCurrentEntryLogListFilled, " + (mCurrentItemIndex >= DEFAULT_ENTRIES_COUNT_IN_SINGLE_LIST));
+            System.out.println("    isCurrentEntryLogListFilled, " + isCurrentEntryLogListFilled);
         }
-        return mCurrentItemIndex >= DEFAULT_ENTRIES_COUNT_IN_SINGLE_LIST;
+        return isCurrentEntryLogListFilled;
     }
 
     /**
@@ -531,7 +546,7 @@ final class VoNaLoggerImpl implements VoNaLogger {
         if (DEBUG) System.out.println(" >> addNewLogTheEntriesListToTheLoggingQueue");
 
         List<LogEntry> singleLogEntries = new ArrayList<>();
-        for (int index = 0; index < DEFAULT_ENTRIES_COUNT_IN_SINGLE_LIST; index++) {
+        for (int index = 0; index < mEntriesCountInSingleList; index++) {
             /**
              * Add an empty log entry. It will be fetched and filled with data later
              */

@@ -2,7 +2,6 @@ package com.volokh.danylo.vonalogger;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.concurrent.Executor;
 
 public interface VoNaLogger {
 
@@ -16,7 +15,8 @@ public interface VoNaLogger {
         private String mLogFileName;
         private File mLogDir;
         private long mLogFileMaxSize;
-        private Integer mEntriesList;
+
+        private Integer mMinimumEntriesCount;
 
         public Builder setLoggerFileName(String logFileName){
             if(mLogFileName != null){
@@ -56,7 +56,7 @@ public interface VoNaLogger {
             checkLogFileNameNotNull();
             checkMaxFileSizeSpecified();
 
-            return new VoNaLoggerImpl(mLogDir, mLogFileName, mLogFileMaxSize, mEntriesList);
+            return new VoNaLoggerImpl(mLogDir, mLogFileName, mLogFileMaxSize, mMinimumEntriesCount);
         }
 
         private void checkMaxFileSizeSpecified() {
@@ -75,6 +75,17 @@ public interface VoNaLogger {
             if(mLogFileName == null){
                 throw new IllegalArgumentException("No log file name was specified. Please specify log file name");
             }
+        }
+
+        /**
+         * This is the minimum entries count that will be written into log file.
+         *
+         * If this number is bigger than file size then file size will be exceeded no more that the amount of text in
+         * minimum entries count
+         */
+        public Builder setMinimumEntriesCount(int minimumEntriesCount) {
+            mMinimumEntriesCount = minimumEntriesCount;
+            return this;
         }
     }
 }
