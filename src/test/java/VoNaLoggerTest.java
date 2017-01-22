@@ -239,13 +239,46 @@ public class VoNaLoggerTest {
 
         final AtomicBoolean filesEquals = new AtomicBoolean(false);
 
-        final Object lockObject = new Object();
-
         File[] logFiles = mVoNaLogger.stopLoggingAndGetLogFilesSync();
 
         System.out.println("<< testFilesCreated, filesEquals " + filesEquals);
 
         assertTrue(Arrays.equals(logFiles, mDirectory.listFiles()));
+
+    }
+
+    @Repeat(times = TESTS_REPEAT_TIME)
+    @Test
+    public void testProcessPendingLogsSync() throws IOException, InterruptedException {
+        System.out.println(">> testProcessPendingLogsSync");
+
+        long maxFileSize = getMaxFileSize();
+
+
+        System.out.println("testProcessPendingLogsSync, mDirectory[" + mDirectory.getAbsolutePath() + "]");
+
+        mVoNaLogger =
+                new VoNaLogger
+                        .Builder()
+                        .setLoggerFileName("VoNaLoggerFileName")
+                        .setLoggerFilesDir(mDirectory)
+                        .setLogFileMaxSize(maxFileSize)
+                        .build();
+
+        String concreteLog = "ConcreteLog";
+        mVoNaLogger.writeLog(concreteLog);
+
+        File[] logFiles = mVoNaLogger.processPendingLogsStopAndGetLogFilesSync();
+
+        for (File file: logFiles){
+            showFileContent(file);
+        }
+
+        boolean concreteLogFound = findSpecificLogInFiles(concreteLog, logFiles);
+
+        System.out.println("testProcessPendingLogsSync, concreteLogFound " + concreteLogFound);
+
+        assertTrue(concreteLogFound);
 
     }
 

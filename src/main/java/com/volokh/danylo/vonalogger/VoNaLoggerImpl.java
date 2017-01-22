@@ -355,6 +355,47 @@ final class VoNaLoggerImpl implements VoNaLogger {
     }
 
     @Override
+    public File[] processPendingLogsStopAndGetLogFilesSync() {
+        if (DEBUG) System.out.println(">> stopLoggingAndGetLogFilesSync");
+
+        final AtomicBoolean mSync = new AtomicBoolean(false);
+        /**
+         * Post the runnable that delivers logging files after writing to file is finished.
+         */
+        mBackgroundThread.execute(new Runnable() {
+            @Override
+            public void run() {
+                if (DEBUG) System.out.println("stopLoggingAndGetLogFilesSync >> run");
+
+                synchronized (mSync){
+                    mSync.set(true);
+                    mSync.notify();
+                }
+            }
+        });
+
+        synchronized (PROCESSING_SYNC_OBJECT) {
+            mShouldProcessPendingLogsAndStop.set(true);
+
+            flushCurrentLogs();
+
+            PROCESSING_SYNC_OBJECT.notify();
+        }
+
+        synchronized (mSync){
+            if(!mSync.get()){
+                try {
+                    mSync.wait();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+        if (DEBUG) System.out.println("<< stopLoggingAndGetLogFilesSync, mTerminated " + mTerminated);
+        return mLogFiles;
+    }
+
+    @Override
     public void stopLoggingAndGetLogFiles(final GetFilesCallback filesCallback) {
         if (DEBUG) System.out.println(">> stopLoggingAndGetLogFilesSync");
 

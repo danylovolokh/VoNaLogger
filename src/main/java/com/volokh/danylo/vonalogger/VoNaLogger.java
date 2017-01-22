@@ -6,6 +6,7 @@ import java.io.IOException;
 public interface VoNaLogger {
 
     File[] stopLoggingAndGetLogFilesSync();
+    File[] processPendingLogsStopAndGetLogFilesSync();
 
     void stopLoggingAndGetLogFiles(GetFilesCallback filesCallback);
     void processPendingLogsStopAndGetLogFiles(GetFilesCallback filesCallback);
