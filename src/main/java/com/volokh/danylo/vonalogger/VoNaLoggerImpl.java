@@ -33,7 +33,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 final class VoNaLoggerImpl implements VoNaLogger {
 
-    private static final boolean DEBUG = true;
+    private static final boolean DEBUG = false;
 
     /**
      * This is a number of entries in a single List of entries.
@@ -74,7 +74,16 @@ final class VoNaLoggerImpl implements VoNaLogger {
      */
     private final Executor mBackgroundThread;
 
+    /**
+     * This condition can stop logs processing even if there are pending logs
+     */
     private final AtomicBoolean mTerminated = new AtomicBoolean(true);
+
+    /**
+     * This conditions is handled in a way that logs writing to file stops only after all of the pending logs was
+     * written to file.
+     */
+    private final AtomicBoolean mShouldProcessPendingLogsAndStop = new AtomicBoolean(false);
 
     private final Integer mEntriesCountInSingleList;
 
@@ -105,36 +114,53 @@ final class VoNaLoggerImpl implements VoNaLogger {
         @Override
         public void run() {
 
+            // this condition will end the processing even if you have some items processing
             while (!mTerminated.get()) {
 
                 try {
 
-                    List<LogEntry> listOfEntriesToProcess;
+                    List<LogEntry> listOfEntriesToProcess = null;
 
                     synchronized (PROCESSING_SYNC_OBJECT) {
                         if (mProcessingEntries.isEmpty()) {
                             try {
 
-                                if (DEBUG) System.out.println("ProcessingRunnable, wait");
-                                PROCESSING_SYNC_OBJECT.wait();
+                                if(mShouldProcessPendingLogsAndStop.get()){
+
+                                    if (DEBUG) System.out.println("ProcessingRunnable, all entries processed. break");
+                                    break;
+
+                                } else {
+
+                                    if(!mTerminated.get()){
+
+                                        if (DEBUG) System.out.println("ProcessingRunnable, wait");
+                                        PROCESSING_SYNC_OBJECT.wait();
+
+                                    } else {
+                                        if (DEBUG) System.out.println("ProcessingRunnable, it's terminated. break");
+                                        break;
+                                    }
+                                }
 
                             } catch (InterruptedException e) {
                                 e.printStackTrace();
                             }
                         } else {
 //                            if (DEBUG) System.out.println("ProcessingRunnable, mProcessingEntries " + mProcessingEntries);
-
                             listOfEntriesToProcess = mProcessingEntries.poll();
-
-                            writeEntriesToFile(listOfEntriesToProcess);
-                            returnTheListForLogging(listOfEntriesToProcess);
                         }
+                    }
+
+                    if(listOfEntriesToProcess != null){
+                        writeEntriesToFile(listOfEntriesToProcess);
+                        returnTheListForLogging(listOfEntriesToProcess);
                     }
 
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
-                if (DEBUG) System.out.println("ProcessingRunnable, mTerminated " + mTerminated);
+                if (DEBUG) System.out.println("ProcessingRunnable, mTerminated " + mTerminated + ", mShouldProcessPendingLogsAndStop " + mShouldProcessPendingLogsAndStop);
 
             }
 
@@ -182,14 +208,21 @@ final class VoNaLoggerImpl implements VoNaLogger {
             createFileWriter();
             initializeBackgroundThreadLogger();
         } else {
-            throw new IllegalStateException("VoNaLogger is not terminated. Please call stopLoggingAndGetLogFiles before calling this method");
+            throw new IllegalStateException("VoNaLogger is not terminated. Please call stopLoggingAndGetLogFilesSync before calling this method");
         }
 
         if (DEBUG) System.out.println("<< initializeVoNaLogger");
     }
 
+    public void initVoNaLoggerAfterStopping() throws IOException {
+        if (!mTerminated.get()) {
+            throw new IllegalStateException("Logger is not stopped");
+        }
+        initializeVoNaLogger(mLogDir, mLogFileName);
+    }
+
     private void writeEntriesToFile(List<LogEntry> listOfEntriesToProcess) throws IOException {
-        if (DEBUG) System.out.println(">> writeEntriesToFile");
+        if (DEBUG) System.out.println(">> writeEntriesToFile listOfEntriesToProcess " + listOfEntriesToProcess);
 
         // check if the current file is overfilled
         File current = currentFile();
@@ -214,7 +247,7 @@ final class VoNaLoggerImpl implements VoNaLogger {
                 mWriter.append("\n");
             } else {
                 if (DEBUG) System.out.println("writeEntriesToFile, found empty logEntry. Probably it wasn't filled yet.");
-                //TODO: may I "break" here? Break if all the rest of LogEntries are empty. TODO: check
+                break;
             }
         }
         mWriter.flush();
@@ -266,9 +299,51 @@ final class VoNaLoggerImpl implements VoNaLogger {
         if (DEBUG) System.out.println("<< performFlush");
     }
 
+    /**
+     * This will terminate writing to files immediately.
+     * If some logs are pending for writing to file they migh not be written to file.
+     */
+    @Override
+    public File[] stopLoggingAndGetLogFilesSync() {
+        if (DEBUG) System.out.println(">> stopLoggingAndGetLogFilesSync");
+
+        final AtomicBoolean mSync = new AtomicBoolean(false);
+        /**
+         * Post the runnable that delivers logging files after writing to file is finished.
+         */
+        mBackgroundThread.execute(new Runnable() {
+            @Override
+            public void run() {
+                if (DEBUG) System.out.println("stopLoggingAndGetLogFilesSync >> run");
+
+                synchronized (mSync){
+                    mSync.set(true);
+                    mSync.notify();
+                }
+            }
+        });
+
+        synchronized (PROCESSING_SYNC_OBJECT) {
+            mTerminated.set(true);
+            PROCESSING_SYNC_OBJECT.notify();
+        }
+
+        synchronized (mSync){
+            if(!mSync.get()){
+                try {
+                    mSync.wait();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+        if (DEBUG) System.out.println("<< stopLoggingAndGetLogFilesSync, mTerminated " + mTerminated);
+        return mLogFiles;
+    }
+
     @Override
     public void stopLoggingAndGetLogFiles(final GetFilesCallback filesCallback) {
-        if (DEBUG) System.out.println(">> stopLoggingAndGetLogFiles");
+        if (DEBUG) System.out.println(">> stopLoggingAndGetLogFilesSync");
 
         if (filesCallback == null) {
             throw new IllegalArgumentException("filesCallback cannot be null");
@@ -280,17 +355,47 @@ final class VoNaLoggerImpl implements VoNaLogger {
         mBackgroundThread.execute(new Runnable() {
             @Override
             public void run() {
-                if (DEBUG) System.out.println("stopLoggingAndGetLogFiles >> run");
+                if (DEBUG) System.out.println("stopLoggingAndGetLogFilesSync >> run");
+
                 filesCallback.onFilesReady(mLogFiles);
             }
         });
 
-        mTerminated.set(true);
-
         synchronized (PROCESSING_SYNC_OBJECT) {
+            mTerminated.set(true);
             PROCESSING_SYNC_OBJECT.notify();
         }
-        if (DEBUG) System.out.println("<< stopLoggingAndGetLogFiles, mTerminated " + mTerminated);
+
+        if (DEBUG) System.out.println("<< stopLoggingAndGetLogFilesSync, mTerminated " + mTerminated);
+    }
+
+    @Override
+    public void processPendingLogsStopAndGetLogFiles(final GetFilesCallback filesCallback) {
+        if (DEBUG) System.out.println(">> processPendingLogsStopAndGetLogFiles");
+
+        if (filesCallback == null) {
+            throw new IllegalArgumentException("filesCallback cannot be null");
+        }
+
+        /**
+         * Post the runnable that delivers logging files after writing to file is finished.
+         */
+        mBackgroundThread.execute(new Runnable() {
+            @Override
+            public void run() {
+                if (DEBUG) System.out.println("processPendingLogsStopAndGetLogFiles >> run");
+                filesCallback.onFilesReady(mLogFiles);
+            }
+        });
+
+        synchronized (PROCESSING_SYNC_OBJECT) {
+            mShouldProcessPendingLogsAndStop.set(true);
+
+            flushCurrentLogs();
+
+            PROCESSING_SYNC_OBJECT.notify();
+        }
+        if (DEBUG) System.out.println("<< processPendingLogsStopAndGetLogFiles");
     }
 
     /**
@@ -299,7 +404,7 @@ final class VoNaLoggerImpl implements VoNaLogger {
      */
     @Override
     public void getLoggingFilesSnapShot(final GetFilesCallback filesCallback) {
-        if (DEBUG) System.out.println(">> stopLoggingAndGetLogFiles");
+        if (DEBUG) System.out.println(">> getLoggingFilesSnapShot");
 
         if (filesCallback == null) {
             throw new IllegalArgumentException("filesCallback cannot be null");
@@ -311,7 +416,7 @@ final class VoNaLoggerImpl implements VoNaLogger {
         mBackgroundThread.execute(new Runnable() {
             @Override
             public void run() {
-                if (DEBUG) System.out.println("stopLoggingAndGetLogFiles >> run");
+                if (DEBUG) System.out.println("stopLoggingAndGetLogFilesSync >> run");
                 File[] logFiles;
                 try {
                     logFiles = createLogFilesSnapshot();
@@ -326,12 +431,11 @@ final class VoNaLoggerImpl implements VoNaLogger {
             }
         });
 
-        mTerminated.set(true);
-
         synchronized (PROCESSING_SYNC_OBJECT) {
+            mTerminated.set(true);
             PROCESSING_SYNC_OBJECT.notify();
         }
-        if (DEBUG) System.out.println("<< stopLoggingAndGetLogFiles");
+        if (DEBUG) System.out.println("<< getLoggingFilesSnapShot");
     }
 
 
@@ -414,7 +518,9 @@ final class VoNaLoggerImpl implements VoNaLogger {
     }
 
     private void returnTheListForLogging(List<LogEntry> listOfEntriesToProcess) {
-        mLoggingEntries.add(listOfEntriesToProcess);
+        synchronized (PROCESSING_SYNC_OBJECT) {
+            mLoggingEntries.add(listOfEntriesToProcess);
+        }
     }
 
     private void createNewFile(File file) throws IOException {
@@ -468,49 +574,37 @@ final class VoNaLoggerImpl implements VoNaLogger {
         mBackgroundThread.execute(mProcessingRunnable);
     }
 
+    /**
+     * Returns "1" if successfully written
+     * Returns "0" if log wasn't written.
+     */
     @Override
     public int writeLog(Object... parameters) {
-
-        if(mTerminated.get()){
-            return 0;
-        }
 
         if (DEBUG) System.out.println(">> writeLog " + Arrays.toString(parameters));
 
         synchronized (PROCESSING_SYNC_OBJECT) {
 
+            if (DEBUG) System.out.println("writeLog, mTerminated " + mTerminated);
+            if (DEBUG) System.out.println("writeLog, mShouldProcessPendingLogsAndStop " + mShouldProcessPendingLogsAndStop);
+
+            if(mTerminated.get()){
+                return 0;
+            }
+
+            if(mShouldProcessPendingLogsAndStop.get()){
+                return 0;
+            }
+
             if (DEBUG) {
-                System.out.println("    writeLog, mCurrentItemIndex " + mCurrentItemIndex);
-                System.out.println("    writeLog, entries count " + ((long) (mProcessingEntries.size() + mLoggingEntries.size()) * (long) mEntriesCountInSingleList));
-                System.out.println("    writeLog, mProcessingEntries count " + (long) (mProcessingEntries.size()));
-                System.out.println("    writeLog, mLoggingEntries count " + (long) (mLoggingEntries.size()));
+                System.out.println("writeLog, mCurrentItemIndex " + mCurrentItemIndex);
+                System.out.println("writeLog, entries count " + ((long) (mProcessingEntries.size() + mLoggingEntries.size()) * (long) mEntriesCountInSingleList));
+                System.out.println("writeLog, mProcessingEntries count " + (long) (mProcessingEntries.size()));
+                System.out.println("writeLog, mLoggingEntries count " + (long) (mLoggingEntries.size()));
             }
 
             if (isCurrentEntryLogListFilled()) {
-
-                /**
-                 * Add current list to processing queue
-                 */
-                mProcessingEntries.add(mCurrentLogEntryList);
-
-                /**
-                 * notify background thread that {@link #mProcessingEntries} is not empty and it can
-                 * be processed
-                 */
-                PROCESSING_SYNC_OBJECT.notify();
-
-                if (DEBUG)
-                    System.out.println("    writeLog, mLoggingEntries isEmpty " + mLoggingEntries.isEmpty());
-
-                if (mLoggingEntries.isEmpty()) {
-
-                    addNewLogTheEntriesListToTheLoggingQueue();
-
-                }
-
-                mCurrentLogEntryList = mLoggingEntries.poll();
-                mCurrentItemIndex = 0;
-
+                flushCurrentLogs();
             }
 
             /**
@@ -526,14 +620,39 @@ final class VoNaLoggerImpl implements VoNaLogger {
             mCurrentItemIndex++;
         }
         if (DEBUG) System.out.println("<< writeLog");
-        return 0;
+        return 1;
+    }
+
+    private void flushCurrentLogs() {
+        /**
+         * Add current list to processing queue
+         */
+        mProcessingEntries.add(mCurrentLogEntryList);
+
+        /**
+         * notify background thread that {@link #mProcessingEntries} is not empty and it can
+         * be processed
+         */
+        PROCESSING_SYNC_OBJECT.notify();
+
+        if (DEBUG)
+            System.out.println("flushCurrentLogs, mLoggingEntries isEmpty " + mLoggingEntries.isEmpty());
+
+        if (mLoggingEntries.isEmpty()) {
+
+            addNewLogTheEntriesListToTheLoggingQueue();
+
+        }
+
+        mCurrentLogEntryList = mLoggingEntries.poll();
+        mCurrentItemIndex = 0;
     }
 
     private boolean isCurrentEntryLogListFilled() {
         boolean isCurrentEntryLogListFilled = mCurrentItemIndex >= mEntriesCountInSingleList;
         if (DEBUG) {
-            System.out.println("    isCurrentEntryLogListFilled, mCurrentItemIndex " + mCurrentItemIndex);
-            System.out.println("    isCurrentEntryLogListFilled, " + isCurrentEntryLogListFilled);
+            System.out.println("isCurrentEntryLogListFilled, mCurrentItemIndex " + mCurrentItemIndex);
+            System.out.println("isCurrentEntryLogListFilled, " + isCurrentEntryLogListFilled);
         }
         return isCurrentEntryLogListFilled;
     }
