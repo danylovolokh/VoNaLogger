@@ -110,6 +110,18 @@ final class VoNaLoggerImpl implements VoNaLogger {
      */
     private List<LogEntry> mCurrentLogEntryList;
 
+    /**
+     * This is a runnable that writes logs into file.
+     *
+     * It's performed in a while loop.
+     *
+     * There is 2 conditions for this loop to stop:
+     * 1. {@link #mTerminated} == true.
+     *      This will terminates the processing even it there are log entries pending.
+     *
+     * 2. {@link #mShouldProcessPendingLogsAndStop} = true;
+     *      This will breaks only after all entries are processed.
+     */
     private final Runnable mProcessingRunnable = new Runnable() {
         @Override
         public void run() {
@@ -200,8 +212,9 @@ final class VoNaLoggerImpl implements VoNaLogger {
      */
     private void initializeVoNaLogger(File logDir, String logFileName) throws IOException {
         if (DEBUG) System.out.println(">> initializeVoNaLogger, mTerminated " + mTerminated);
-        if (mTerminated.get()) {
+        if (mTerminated.get() || mShouldProcessPendingLogsAndStop.get()) {
 
+            mShouldProcessPendingLogsAndStop.set(false);
             mTerminated.set(false);
 
             prepareLogFiles(logDir, logFileName, LOG_FILES_COUNT);

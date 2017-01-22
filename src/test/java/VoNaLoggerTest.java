@@ -76,6 +76,7 @@ public class VoNaLoggerTest {
         final AtomicBoolean lockObject = new AtomicBoolean();
 
         final AtomicLong totalFilesSizeInBytes = new AtomicLong(0);
+
         mVoNaLogger.processPendingLogsStopAndGetLogFiles(new GetFilesCallback() {
             @Override
             public void onFilesReady(File[] logFiles) {
@@ -105,6 +106,74 @@ public class VoNaLoggerTest {
         }
 
         assertEquals(expectedMaxFileSize, totalFilesSizeInBytes.intValue());
+    }
+
+    @Repeat(times = TESTS_REPEAT_TIME)
+    @Test
+    public void testAllEntriesProcessed() throws IOException, InterruptedException {
+
+        int minimumEntriesCount = 20;
+
+        final int expectedMaxFileSize = getMaxFileSize();
+
+        mVoNaLogger =
+                new VoNaLogger
+                        .Builder()
+                        .setLoggerFileName("VoNaLoggerFileName")
+                        .setLoggerFilesDir(mDirectory)
+                        .setMinimumEntriesCount(minimumEntriesCount)
+                        .setLogFileMaxSize(expectedMaxFileSize)
+                        .build();
+
+        /**
+         * Assuming a single char is taking at least 8 bits (1 byte)
+         * After writing {@link minimumEntriesCount} + 1 amount of characters
+         * There will be enough characters to write to file
+         *
+         */
+        for(int charIndex = 0; charIndex < minimumEntriesCount; charIndex++){
+            assertEquals(mVoNaLogger.writeLog("First Log"), 1);
+
+            // + "/n" is added after every log entry
+            // this means that actual amount of characters will be "maxFileSize * 2"
+        }
+
+        final String concreteLog = "Concrete Log";
+        mVoNaLogger.writeLog(concreteLog);
+
+        final AtomicBoolean lockObject = new AtomicBoolean();
+
+        final AtomicBoolean concreteLogFound = new AtomicBoolean();
+
+        mVoNaLogger.processPendingLogsStopAndGetLogFiles(new GetFilesCallback() {
+            @Override
+            public void onFilesReady(File[] logFiles) {
+                System.out.println("onFilesReady, logFiles " + Arrays.toString(logFiles));
+
+                for(File logFile: logFiles){
+                    System.out.println("onFilesReady, logFile.length() " + logFile.length());
+                    showFileContent(logFile);
+                }
+
+                concreteLogFound.set(findSpecificLogInFiles(concreteLog, logFiles));
+
+                System.out.println("onFilesReady, concreteLogFound " + concreteLogFound);
+
+                synchronized (lockObject) {
+                    lockObject.set(true);
+                    lockObject.notify();
+                }
+
+            }
+        });
+
+        synchronized (lockObject) {
+            if(!lockObject.get()){
+                lockObject.wait();
+            }
+        }
+
+        assertTrue(concreteLogFound.get());
     }
 
     @Repeat(times = TESTS_REPEAT_TIME)
@@ -337,10 +406,10 @@ public class VoNaLoggerTest {
         }
     }
 
-    private long getMaxFileSize() {
+    private int getMaxFileSize() {
         /**
          * 1kb
          */
-        return (long) 1024;
+        return 1024;
     }
 }
