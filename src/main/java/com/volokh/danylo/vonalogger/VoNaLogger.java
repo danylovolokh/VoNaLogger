@@ -5,13 +5,15 @@ import java.io.IOException;
 
 public interface VoNaLogger {
 
+    void initVoNaLoggerAfterStopping() throws IOException;
+
     File[] stopLoggingAndGetLogFilesSync();
     File[] processPendingLogsStopAndGetLogFilesSync();
 
     void stopLoggingAndGetLogFiles(GetFilesCallback filesCallback);
     void processPendingLogsStopAndGetLogFiles(GetFilesCallback filesCallback);
 
-    void getLoggingFilesSnapShot(GetFilesCallback filesCallback);
+    File[] getLoggingFilesSnapShotSync();
 
     int writeLog(Object... parameters);
 
@@ -39,18 +41,6 @@ public interface VoNaLogger {
 
             return this;
         }
-
-//        /**
-//         * This is optional. If it's not called a new thread will be created inside
-//         * {@link VoNaLoggerImpl()}
-//         *
-//         * @param executor
-//         * @return
-//         */
-//        public Builder setThreadExecutor(Executor executor){
-//            this.mExecutor = executor;
-//            return this;
-//        }
 
         public Builder setLogFileMaxSize(long sizeInBytes){
             mLogFileMaxSize = sizeInBytes;

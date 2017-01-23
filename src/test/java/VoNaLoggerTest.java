@@ -11,6 +11,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 public class VoNaLoggerTest {
@@ -28,14 +29,17 @@ public class VoNaLoggerTest {
 
     @Before
     public void before(){
-        if(SHOW_LOGS) if(SHOW_LOGS) System.out.println("before");
+        if(SHOW_LOGS) if(SHOW_LOGS) System.out.println(">> before");
+
         mDirectory = createDirectoryIfNeeded("log_files_directory");
+        clearDirectory(mDirectory);
+
+        if(SHOW_LOGS) if(SHOW_LOGS) System.out.println("<< before");
     }
 
     @After
     public void after(){
-        if(SHOW_LOGS) System.out.println("after");
-        clearDirectory(mDirectory);
+        if(SHOW_LOGS) System.out.println(">> after");
 
         /**
          * This can be null for some tests. See:
@@ -50,6 +54,10 @@ public class VoNaLoggerTest {
              */
             mVoNaLogger.releaseResources();
         }
+        clearDirectory(mDirectory);
+        mDirectory.delete();
+
+        if(SHOW_LOGS) System.out.println("<< after");
     }
 
     @Repeat(times = TESTS_REPEAT_TIME)
@@ -166,10 +174,7 @@ public class VoNaLoggerTest {
             public void onFilesReady(File[] logFiles) {
                 if(SHOW_LOGS) System.out.println("onFilesReady, logFiles " + Arrays.toString(logFiles));
 
-                for(File logFile: logFiles){
-                    if(SHOW_LOGS) System.out.println("onFilesReady, logFile.length() " + logFile.length());
-                    showFileContent(logFile);
-                }
+                showFilesContent(logFiles);
 
                 concreteLogFound.set(findSpecificLogInFiles(concreteLog, logFiles));
 
@@ -270,7 +275,6 @@ public class VoNaLoggerTest {
 
         long maxFileSize = getMaxFileSize();
 
-
         if(SHOW_LOGS) System.out.println("testProcessPendingLogsSync, mDirectory[" + mDirectory.getAbsolutePath() + "]");
 
         mVoNaLogger =
@@ -286,9 +290,7 @@ public class VoNaLoggerTest {
 
         File[] logFiles = mVoNaLogger.processPendingLogsStopAndGetLogFilesSync();
 
-        for (File file: logFiles){
-            showFileContent(file);
-        }
+        showFilesContent(logFiles);
 
         boolean concreteLogFound = findSpecificLogInFiles(concreteLog, logFiles);
 
@@ -352,6 +354,107 @@ public class VoNaLoggerTest {
 
     }
 
+    @Repeat(times = TESTS_REPEAT_TIME)
+    @Test
+    public void testStartLoggingAfterStop() throws IOException, InterruptedException {
+        if(SHOW_LOGS) System.out.println(">> testStartLoggingAfterStop");
+
+        long maxFileSize = 10;
+
+        if(SHOW_LOGS) System.out.println("testStartLoggingAfterStop, mDirectory[" + mDirectory.getAbsolutePath() + "]");
+
+        mVoNaLogger =
+                new VoNaLogger
+                        .Builder()
+                        .setLoggerFileName("VoNaLoggerFileName")
+                        .setLoggerFilesDir(mDirectory)
+                        .setLogFileMaxSize(maxFileSize)
+                        .build();
+
+        /**
+         * Write a 1000 logs
+         */
+        for(int index = 0; index < 1000; index++){
+            mVoNaLogger.writeLog("First Log");
+        }
+
+        String concreteLog = "Concrete Log";
+        mVoNaLogger.writeLog(concreteLog);
+
+        File[] logFiles = mVoNaLogger.processPendingLogsStopAndGetLogFilesSync();
+        if(SHOW_LOGS) System.out.println("testStartLoggingAfterStop, logFiles " + Arrays.toString(logFiles));
+        boolean concreteLogFound = findSpecificLogInFiles(concreteLog, logFiles);
+        assertTrue(concreteLogFound);
+
+        /** init logger again*/
+        mVoNaLogger.initVoNaLoggerAfterStopping();
+
+        String newConcreteLog = "newConcreteLog";
+        assertEquals(mVoNaLogger.writeLog(newConcreteLog), 1);
+
+        File[] logFilesAfterRestart = mVoNaLogger.processPendingLogsStopAndGetLogFilesSync();
+        if(SHOW_LOGS) System.out.println("testStartLoggingAfterStop, logFilesAfterRestart " + Arrays.toString(logFilesAfterRestart));
+
+        /** Check if new log found after restart*/
+        boolean newConcreteLogFound = findSpecificLogInFiles(newConcreteLog, logFiles);
+        assertTrue(newConcreteLogFound);
+
+        if(SHOW_LOGS) System.out.println("<< testStartLoggingAfterStop");
+
+    }
+
+    @Repeat(times = TESTS_REPEAT_TIME)
+    @Test
+    public void testGetSnapShot() throws IOException, InterruptedException {
+        if(SHOW_LOGS) System.out.println(">> testGetSnapShot");
+
+        long maxFileSize = 10;
+
+        if(SHOW_LOGS) System.out.println("testGetSnapShot, mDirectory[" + mDirectory.getAbsolutePath() + "]");
+
+        mVoNaLogger =
+                new VoNaLogger
+                        .Builder()
+                        .setLoggerFileName("VoNaLoggerFileName")
+                        .setLoggerFilesDir(mDirectory)
+                        .setLogFileMaxSize(maxFileSize)
+                        .build();
+
+        /**
+         * Write a 1000 logs
+         */
+        for(int index = 0; index < 1000; index++){
+            mVoNaLogger.writeLog("First Log");
+        }
+
+        File[] snapShotLogFiles = mVoNaLogger.getLoggingFilesSnapShotSync();
+        if(SHOW_LOGS) System.out.println("testGetSnapShot, snapShotLogFiles " + Arrays.toString(snapShotLogFiles));
+        assertNotNull(snapShotLogFiles);
+
+        showFilesContent(snapShotLogFiles);
+
+        String concreteLog = "Concrete Log";
+        assertEquals(mVoNaLogger.writeLog(concreteLog), 1);
+
+        File[] logFilesAfterRestart = mVoNaLogger.processPendingLogsStopAndGetLogFilesSync();
+        if(SHOW_LOGS) System.out.println("testGetSnapShot, logFilesAfterRestart " + Arrays.toString(logFilesAfterRestart));
+
+
+        boolean concreteLogFound = findSpecificLogInFiles(concreteLog, logFilesAfterRestart);
+
+        /** Check if concrete log found after getting the snapshot*/
+        assertTrue(concreteLogFound);
+
+        if(SHOW_LOGS) System.out.println("<< testGetSnapShot");
+
+    }
+
+    private void showFilesContent(File[] logFiles) {
+        for(File logFile : logFiles){
+            showFileContent(logFile);
+        }
+    }
+
     private boolean findSpecificLogInFiles(String concreteLog, File[] logFiles) {
         boolean found = false;
         for(File logFile : logFiles){
@@ -372,14 +475,16 @@ public class VoNaLoggerTest {
         try {
             inFile = new BufferedReader(new FileReader(logFile));
             String line;
+            int index = 1;
             while((line = inFile.readLine()) != null)
             {
-                if(SHOW_LOGS) System.out.println("findLogInFile, line[" + line + "]");
+                if(SHOW_LOGS) System.out.println("> line " + index + " findLogInFile, line[" + line + "]");
 
                 if(line.contains(concreteLog)){
                     found = true;
                     break;
                 }
+                index++;
             }
 
         } catch (IOException e) {
@@ -432,7 +537,7 @@ public class VoNaLoggerTest {
             int index = 1;
             while((line = inFile.readLine()) != null)
             {
-                if(SHOW_LOGS) System.out.println("> linea " + index + " ["+ line + "]");
+                if(SHOW_LOGS) System.out.println("> line " + index + " ["+ line + "]");
                 index++;
             }
 
@@ -455,7 +560,10 @@ public class VoNaLoggerTest {
         for(File file: directory.listFiles()){
             if (!file.isDirectory()){
                 //noinspection ResultOfMethodCallIgnored
-                file.delete();
+                boolean deleted = file.delete();
+                if(deleted){
+                    if(SHOW_LOGS) System.out.println("clearDirectory, file deleted, " + file);
+                }
             }
         }
     }
