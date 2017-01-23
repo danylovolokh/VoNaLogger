@@ -15,6 +15,8 @@ public interface VoNaLogger {
 
     int writeLog(Object... parameters);
 
+    void releaseResources();
+
     class Builder {
 
         private String mLogFileName;

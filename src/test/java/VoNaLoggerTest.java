@@ -15,7 +15,10 @@ import static org.junit.Assert.assertTrue;
 
 public class VoNaLoggerTest {
 
-    private static final int TESTS_REPEAT_TIME = 1000;
+    private static final boolean SHOW_LOGS = false;
+
+    private static final int TESTS_REPEAT_TIME = 10000;
+
     private VoNaLogger mVoNaLogger;
 
     private File mDirectory;
@@ -25,14 +28,28 @@ public class VoNaLoggerTest {
 
     @Before
     public void before(){
-        System.out.println("before");
+        if(SHOW_LOGS) if(SHOW_LOGS) System.out.println("before");
         mDirectory = createDirectoryIfNeeded("log_files_directory");
     }
 
     @After
     public void after(){
-        System.out.println("after");
+        if(SHOW_LOGS) System.out.println("after");
         clearDirectory(mDirectory);
+
+        /**
+         * This can be null for some tests. See:
+         * {@link #testLoggerFileNameNotSpecified()}
+         * {@link #testLoggerFilesDirectoryNotSpecified()}
+         * {@link #testMaxFileSizeNotSpecified()}
+         */
+        if(mVoNaLogger != null){
+            /**
+             * have to release resources because we cannot create an infinite amount of
+             * threads
+             */
+            mVoNaLogger.releaseResources();
+        }
     }
 
     @Repeat(times = TESTS_REPEAT_TIME)
@@ -45,7 +62,6 @@ public class VoNaLoggerTest {
         int maxFileSize = 5;
 
         int minimumEntriesCount = 20;
-
 
         final int expectedMaxFileSize = Math.max(
                 // "\n" sign is added after every entry that's why multiply by 2
@@ -80,16 +96,16 @@ public class VoNaLoggerTest {
         mVoNaLogger.processPendingLogsStopAndGetLogFiles(new GetFilesCallback() {
             @Override
             public void onFilesReady(File[] logFiles) {
-                System.out.println("onFilesReady, logFiles " + Arrays.toString(logFiles));
+                if(SHOW_LOGS) System.out.println("onFilesReady, logFiles " + Arrays.toString(logFiles));
 
                 for(File logFile: logFiles){
-                    System.out.println("onFilesReady, logFile.length() " + logFile.length());
+                    if(SHOW_LOGS) System.out.println("onFilesReady, logFile.length() " + logFile.length());
 
                     totalFilesSizeInBytes.addAndGet(logFile.length());
                     showFileContent(logFile);
                 }
 
-                System.out.println("onFilesReady, totalFilesSizeInBytes " + totalFilesSizeInBytes);
+                if(SHOW_LOGS) System.out.println("onFilesReady, totalFilesSizeInBytes " + totalFilesSizeInBytes);
 
                 synchronized (lockObject) {
                     lockObject.set(true);
@@ -148,16 +164,16 @@ public class VoNaLoggerTest {
         mVoNaLogger.processPendingLogsStopAndGetLogFiles(new GetFilesCallback() {
             @Override
             public void onFilesReady(File[] logFiles) {
-                System.out.println("onFilesReady, logFiles " + Arrays.toString(logFiles));
+                if(SHOW_LOGS) System.out.println("onFilesReady, logFiles " + Arrays.toString(logFiles));
 
                 for(File logFile: logFiles){
-                    System.out.println("onFilesReady, logFile.length() " + logFile.length());
+                    if(SHOW_LOGS) System.out.println("onFilesReady, logFile.length() " + logFile.length());
                     showFileContent(logFile);
                 }
 
                 concreteLogFound.set(findSpecificLogInFiles(concreteLog, logFiles));
 
-                System.out.println("onFilesReady, concreteLogFound " + concreteLogFound);
+                if(SHOW_LOGS) System.out.println("onFilesReady, concreteLogFound " + concreteLogFound);
 
                 synchronized (lockObject) {
                     lockObject.set(true);
@@ -222,12 +238,12 @@ public class VoNaLoggerTest {
     @Repeat(times = TESTS_REPEAT_TIME)
     @Test
     public void testFilesCreated() throws IOException, InterruptedException {
-        System.out.println(">> testFilesCreated");
+        if(SHOW_LOGS) System.out.println(">> testFilesCreated");
 
         long maxFileSize = getMaxFileSize();
 
 
-        System.out.println("testFilesCreated, mDirectory[" + mDirectory.getAbsolutePath() + "]");
+        if(SHOW_LOGS) System.out.println("testFilesCreated, mDirectory[" + mDirectory.getAbsolutePath() + "]");
 
         mVoNaLogger =
                 new VoNaLogger
@@ -241,7 +257,7 @@ public class VoNaLoggerTest {
 
         File[] logFiles = mVoNaLogger.stopLoggingAndGetLogFilesSync();
 
-        System.out.println("<< testFilesCreated, filesEquals " + filesEquals);
+        if(SHOW_LOGS) System.out.println("<< testFilesCreated, filesEquals " + filesEquals);
 
         assertTrue(Arrays.equals(logFiles, mDirectory.listFiles()));
 
@@ -250,12 +266,12 @@ public class VoNaLoggerTest {
     @Repeat(times = TESTS_REPEAT_TIME)
     @Test
     public void testProcessPendingLogsSync() throws IOException, InterruptedException {
-        System.out.println(">> testProcessPendingLogsSync");
+        if(SHOW_LOGS) System.out.println(">> testProcessPendingLogsSync");
 
         long maxFileSize = getMaxFileSize();
 
 
-        System.out.println("testProcessPendingLogsSync, mDirectory[" + mDirectory.getAbsolutePath() + "]");
+        if(SHOW_LOGS) System.out.println("testProcessPendingLogsSync, mDirectory[" + mDirectory.getAbsolutePath() + "]");
 
         mVoNaLogger =
                 new VoNaLogger
@@ -276,7 +292,7 @@ public class VoNaLoggerTest {
 
         boolean concreteLogFound = findSpecificLogInFiles(concreteLog, logFiles);
 
-        System.out.println("testProcessPendingLogsSync, concreteLogFound " + concreteLogFound);
+        if(SHOW_LOGS) System.out.println("testProcessPendingLogsSync, concreteLogFound " + concreteLogFound);
 
         assertTrue(concreteLogFound);
 
@@ -285,11 +301,11 @@ public class VoNaLoggerTest {
     @Repeat(times = TESTS_REPEAT_TIME)
     @Test
     public void testStopLoggingAfterCallingStop() throws IOException, InterruptedException {
-        System.out.println(">> testStopLoggingAfterCallingStop");
+        if(SHOW_LOGS) System.out.println(">> testStopLoggingAfterCallingStop");
 
         long maxFileSize = 10;
 
-        System.out.println("testStopLoggingAfterCallingStop, mDirectory[" + mDirectory.getAbsolutePath() + "]");
+        if(SHOW_LOGS) System.out.println("testStopLoggingAfterCallingStop, mDirectory[" + mDirectory.getAbsolutePath() + "]");
 
         mVoNaLogger =
                 new VoNaLogger
@@ -311,8 +327,8 @@ public class VoNaLoggerTest {
         mVoNaLogger.stopLoggingAndGetLogFiles(new GetFilesCallback() {
             @Override
             public void onFilesReady(File[] logFiles) {
-                System.out.println("onFilesReady, logFiles " + Arrays.toString(logFiles));
-                System.out.println("onFilesReady, logFiles " + Arrays.toString(mDirectory.listFiles()));
+                if(SHOW_LOGS) System.out.println("onFilesReady, logFiles " + Arrays.toString(logFiles));
+                if(SHOW_LOGS) System.out.println("onFilesReady, logFiles " + Arrays.toString(mDirectory.listFiles()));
 
                 synchronized (syncObject) {
                     syncObject.set(true);
@@ -324,15 +340,15 @@ public class VoNaLoggerTest {
 
         synchronized (syncObject) {
             if(!syncObject.get()){
-                System.out.println("testStopLoggingAfterCallingStop, wait" );
+                if(SHOW_LOGS) System.out.println("testStopLoggingAfterCallingStop, wait" );
                 syncObject.wait();
             }
         }
-        System.out.println("testStopLoggingAfterCallingStop, wait >>" );
+        if(SHOW_LOGS) System.out.println("testStopLoggingAfterCallingStop, wait >>" );
 
         assertEquals(mVoNaLogger.writeLog("Any log"), 0);
 
-        System.out.println("<< testStopLoggingAfterCallingStop");
+        if(SHOW_LOGS) System.out.println("<< testStopLoggingAfterCallingStop");
 
     }
 
@@ -348,7 +364,7 @@ public class VoNaLoggerTest {
     }
 
     private boolean findLogInFile(String concreteLog, File logFile) {
-        System.out.println("findLogInFile, concreteLog[" + concreteLog + "] " + logFile);
+        if(SHOW_LOGS) System.out.println("findLogInFile, concreteLog[" + concreteLog + "] " + logFile);
 
         boolean found = false;
         BufferedReader inFile = null;
@@ -358,7 +374,7 @@ public class VoNaLoggerTest {
             String line;
             while((line = inFile.readLine()) != null)
             {
-                System.out.println("findLogInFile, line[" + line + "]");
+                if(SHOW_LOGS) System.out.println("findLogInFile, line[" + line + "]");
 
                 if(line.contains(concreteLog)){
                     found = true;
@@ -385,7 +401,7 @@ public class VoNaLoggerTest {
         String path = currDir.getAbsolutePath();
         path = path.substring(0, path.length() - 1);
 
-        System.out.println("createDirectoryIfNeeded, path[" + path + "]");
+        if(SHOW_LOGS) System.out.println("createDirectoryIfNeeded, path[" + path + "]");
 
         currDir = new File(path, logFilesDirectory);
 
@@ -395,13 +411,18 @@ public class VoNaLoggerTest {
             }
         }
 
-        System.out.println("createDirectoryIfNeeded, currDir[" + currDir + "]");
+        if(SHOW_LOGS) System.out.println("createDirectoryIfNeeded, currDir[" + currDir + "]");
 
         return currDir;
     }
 
     private void showFileContent(File file) {
-        System.out.println(">> showFileContent, file " + file);
+
+        if(!SHOW_LOGS){
+            return;
+        }
+
+        if(SHOW_LOGS) System.out.println(">> showFileContent, file " + file);
 
         BufferedReader inFile = null;
 
@@ -411,7 +432,7 @@ public class VoNaLoggerTest {
             int index = 1;
             while((line = inFile.readLine()) != null)
             {
-                System.out.println("> linea " + index + " ["+ line + "]");
+                if(SHOW_LOGS) System.out.println("> linea " + index + " ["+ line + "]");
                 index++;
             }
 
@@ -426,7 +447,7 @@ public class VoNaLoggerTest {
                 e.printStackTrace();
             }
         }
-        System.out.println("<< showFileContent, file " + file);
+        if(SHOW_LOGS) System.out.println("<< showFileContent, file " + file);
     }
 
     private void clearDirectory(File directory) {

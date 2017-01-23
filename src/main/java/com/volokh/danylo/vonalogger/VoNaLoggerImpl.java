@@ -8,7 +8,7 @@ import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
-import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -72,7 +72,7 @@ final class VoNaLoggerImpl implements VoNaLogger {
     /**
      * This is executor that is used to write logs into files in background thread.
      */
-    private final Executor mBackgroundThread;
+    private final ExecutorService mBackgroundThread;
 
     /**
      * This condition can stop logs processing even if there are pending logs
@@ -675,6 +675,11 @@ final class VoNaLoggerImpl implements VoNaLogger {
         }
         if (DEBUG) System.out.println("<< writeLog");
         return 1;
+    }
+
+    @Override
+    public void releaseResources() {
+        mBackgroundThread.shutdown();
     }
 
     private void flushCurrentLogs() {
