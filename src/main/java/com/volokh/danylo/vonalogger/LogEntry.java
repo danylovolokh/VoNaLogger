@@ -5,7 +5,7 @@ import java.util.Arrays;
 /**
  * Created by danylo.volokh on 12/28/16.
  *
- * Logh Entry contains the parameters taht has to be written into file.
+ * Log Entry contains the parameters that has to be written into file.
  */
 class LogEntry {
 
@@ -24,6 +24,8 @@ class LogEntry {
     /**
      * This method returns merged string of parameters passed to the logger.
      * After creating a merged string it cleans the content to prevent reusing non-valid data.
+     *
+     * Parameters are split with tabulation sign.
      */
     String getMergedStringAndClean(){
 

@@ -18,7 +18,7 @@ public class VoNaLoggerTest {
 
     private static final boolean SHOW_LOGS = false;
 
-    private static final int TESTS_REPEAT_TIME = 10000;
+    private static final int TESTS_REPEAT_TIME = 100;
 
     private VoNaLogger mVoNaLogger;
 

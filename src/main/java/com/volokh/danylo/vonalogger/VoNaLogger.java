@@ -40,6 +40,7 @@ public interface VoNaLogger {
         private long mLogFileMaxSize;
 
         private Integer mMinimumEntriesCount;
+        private Boolean mShowLogs;
 
         /**
          * This method sets the file name for a logging.
@@ -72,6 +73,11 @@ public interface VoNaLogger {
             return this;
         }
 
+        public Builder setShowLogs(Boolean showLogs){
+            this.mShowLogs = showLogs;
+            return this;
+        }
+
         /**
          * This method creates a concrete class of {@link VoNaLogger}
          */
@@ -81,7 +87,7 @@ public interface VoNaLogger {
             checkLogFileNameNotNull();
             checkMaxFileSizeSpecified();
 
-            return new VoNaLoggerImpl(mLogDir, mLogFileName, mLogFileMaxSize, mMinimumEntriesCount);
+            return new VoNaLoggerImpl(mLogDir, mLogFileName, mLogFileMaxSize, mMinimumEntriesCount, mShowLogs);
         }
 
         private void checkMaxFileSizeSpecified() {
