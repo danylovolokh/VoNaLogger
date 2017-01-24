@@ -516,7 +516,7 @@ final class VoNaLoggerImpl implements VoNaLogger {
         File[] logFilesSnapshot = new File[LOG_FILES_COUNT];
         for (int index = 0; index < mLogFiles.length; index++) {
 
-            String fileName = mLogFiles[index].getName();
+            String fileName = mLogFiles[index].getAbsolutePath();
             String rawName = fileName.substring(0, fileName.length() - LOG_FILE_SUFIX.length());
 
             File snapShotLogFile = new File(rawName + "_snapshot" + LOG_FILE_SUFIX);
