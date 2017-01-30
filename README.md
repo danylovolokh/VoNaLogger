@@ -10,6 +10,16 @@ buildscript {
     }
 }
 ```
+Or Maven
+
+```
+<dependency>
+  <groupId>com.github.danylovolokh</groupId>
+  <artifactId>vona-logger</artifactId>
+  <version>1.0.1</version>
+  <type>pom</type>
+</dependency>
+```
 
 # Usage of VoNaLogger
 ```
