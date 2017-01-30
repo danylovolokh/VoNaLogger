@@ -74,7 +74,7 @@ File[] logFiles = voNaLogger.processPendingLogsStopAndGetLogFilesSync();
 voNaLogger.initVoNaLoggerAfterStopping();
 
 // 5. Calling this method will return a Files snapshot and it doesn't stop logger so it shouldn't be initialized again.
-voNaLogger.getLoggingFilesSnapShotSync();
+File[] logFiles = voNaLogger.getLoggingFilesSnapShotSync();
 
 ```
 # How it works
