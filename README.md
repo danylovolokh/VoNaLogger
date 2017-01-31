@@ -2,7 +2,7 @@
 This is a lightweight Logger written in pure Java.
 
 # Usage
-Add this snippet to your project build.gradle file:
+If you use Gradle. Add this snippet to your project build.gradle file:
 ```
 buildscript {
     repositories {
@@ -10,8 +10,14 @@ buildscript {
     }
 }
 ```
-Or Maven
-
+# Usage of VoNaLogger
+Gradle
+```
+dependencies {
+    compile 'com.github.danylovolokh:vona-logger:1.0.1'
+}
+```
+Maven
 ```
 <dependency>
   <groupId>com.github.danylovolokh</groupId>
@@ -21,12 +27,6 @@ Or Maven
 </dependency>
 ```
 
-# Usage of VoNaLogger
-```
-dependencies {
-    compile 'com.github.danylovolokh:vona-logger:1.0.1'
-}
-```
 First of all it needs to be initialized:
 ```
 File directory = //...
