@@ -88,9 +88,9 @@ File[] logFiles = voNaLogger.getLoggingFilesSnapShotSync();
 
 ```
 # How it works
-The logs (any parameters passed to the logger) are stored in Log Entries.
+The logs (any parameters passed to the logger) are stored in Log Entries. Log Entries are reused because the main goal of this library is to create the smallest amount of objects during writing to file.
 
-TODO:
+![logging_animation_converted](https://cloud.githubusercontent.com/assets/2686355/22549863/1b5c202c-e956-11e6-9b07-b500391a06b8.gif)
 
 # License
 
